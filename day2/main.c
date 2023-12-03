@@ -1,7 +1,10 @@
 #include <_ctype.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+int max(int a, int b) { return a > b ? a : b; }
 
 int isValidGame(char *color, int number) {
 
@@ -29,12 +32,15 @@ int main(int argc, char *argv[]) {
 
     char ch;
     char color[6];
-    int firstNumber = 0;
-    int secondNumber = 0;
+    char number[2];
     int numberIndex = 0;
     int colorIndex = 0;
     int result = 0;
     int validGame = 0;
+    int resultByPower = 0;
+    int maxBlue = 0;
+    int maxRed = 0;
+    int maxGreen = 0;
 
     do {
         ch = fgetc(file);
@@ -47,11 +53,8 @@ int main(int argc, char *argv[]) {
             continue;
         }
         if (isnumber(ch)) {
-            if (firstNumber == 0) {
-                firstNumber = ch - '0';
-            } else {
-                secondNumber = ch - '0';
-            }
+            number[numberIndex] = ch;
+            numberIndex++;
             continue;
         }
         if (isalpha(ch)) {
@@ -60,30 +63,40 @@ int main(int argc, char *argv[]) {
         }
 
         if (ch == ',' || ch == ';' || ch == '\n') {
-            int concat;
-            if (secondNumber == 0) {
-                concat = firstNumber;
-            } else {
-                concat = firstNumber * 10 + secondNumber;
-            }
-            if (isValidGame(color, concat) == -1) {
+            int numberInt = atoi(number);
+            if (isValidGame(color, numberInt) == -1) {
                 validGame = -1;
             }
+            if (strcmp(color, "green") == 0) {
+                maxGreen = max(maxGreen, numberInt);
+            } else if (strcmp(color, "red") == 0) {
+                maxRed = max(maxRed, numberInt);
+            } else if (strcmp(color, "blue") == 0) {
+                maxBlue = max(maxBlue, numberInt);
+            }
+
             colorIndex = 0;
             numberIndex = 0;
+            for (int i = 0; i < 2; i++) {
+                number[i] = '\0';
+            }
 
             for (int i = 0; i < 5; i++) {
                 color[i] = '\0';
             }
-            firstNumber = 0;
-            secondNumber = 0;
+
             if (ch == '\n') {
-                printf("validGame: %d\n", validGame);
                 if (validGame == 0) {
                     result += gameNumber;
                 }
+                int tempResult = maxBlue * maxRed * maxGreen;
+                resultByPower += tempResult;
                 gameStarted = 0;
+                maxBlue = 0;
+                maxRed = 0;
+                maxGreen = 0;
                 gameNumber++;
+                validGame = 0;
             }
         }
 
@@ -91,6 +104,7 @@ int main(int argc, char *argv[]) {
     } while (ch != EOF);
 
     printf("Result: %d\n", result);
+    printf("Result by power: %d\n", resultByPower);
 
     return 0;
 }
