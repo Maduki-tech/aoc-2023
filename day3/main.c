@@ -1,238 +1,101 @@
+#include <assert.h>
+#include <ctype.h>
 #include <stdio.h>
-#include <string.h>
+#define GSZ 160
 
-#define BUFFER_COUNT 1024
-#define LINE_LEN 141
-#define NUMBER_COUNT 1219
+#define DISCARD(x) ((void)!(x))
 
-// Assuming the number starts at index 4
-typedef struct Number {
-    int value;
-    int startIndex;
-    int endIndex;
-    int counted;
-} Number;
+int main(int argc, char **argv) {
+    static char G[GSZ][GSZ];
+    static int N[GSZ][GSZ];
+    int p1 = 0, p2 = 0, h = 0, x, y, dx, dy, n = 0, sym = 0, r;
 
-// Finds the index of the first number n such that
-// endIndex <= n.endIndex
-int FindEndIndex(Number *numbers, int endIndex) {
-    int start = 0;
-    int end = NUMBER_COUNT;
+    if (argc > 1)
+        DISCARD(freopen(argv[1], "r", stdin));
 
-    while (1) // The numbers array is sorted so we use binary search
-    {
-        if (end - start <= 1)
-            break;
+    for (h = 0; fgets(&G[h + 1][1], GSZ - 1, stdin); h++)
+        assert(h < GSZ);
 
-        int mid = (start + end) / 2;
+    /*
+     * Pass 1: parse numbers and solve part 1. For every digit in
+     * G, the full number it is part of is stored in N.
+     */
+    for (y = 1; y <= h; y++)
+        for (x = 1; G[y][x]; x++)
+            if (isdigit(G[y][x])) {
+                n = n * 10 + G[y][x] - '0';
 
-        if (numbers[mid].endIndex < endIndex) {
-            start = mid;
-            continue;
-        }
-
-        end = mid;
-    }
-
-    return end;
-}
-
-void PartOne() {
-    char buffer[BUFFER_COUNT];
-
-    Number numbers[NUMBER_COUNT];
-    memset(numbers, 0, NUMBER_COUNT * sizeof(Number));
-    int numberIndex = 0;
-
-    FILE *fp = fopen("./day3/input.txt", "r");
-
-    if (fp == NULL) {
-        printf("Unable to open file.");
-    }
-
-    int currentNumberValue = 0;
-    Number currentNumber = {0};
-
-    int globalIndex = 0;
-
-    // First pass, parse all numbers
-    while (fgets(buffer, BUFFER_COUNT, fp) != NULL) {
-        for (int index = 0; index < BUFFER_COUNT; index++, globalIndex++) {
-            char c = buffer[index];
-            if (c == '\0')
-                break;
-
-            if (c >= '0' && c <= '9') {
-                if (currentNumberValue == 0)
-                    currentNumber.startIndex = globalIndex;
-                currentNumberValue *= 10;
-                currentNumberValue += c - '0';
-                continue;
+                for (dy = -1; dy < 2; dy++)
+                    for (dx = -1; dx < 2; dx++)
+                        sym = sym || (x && y && G[y + dy][x + dx] != '.' &&
+                                      ispunct(G[y + dy][x + dx]));
+            } else {
+                for (dx = -1; isdigit(G[y][x + dx]); dx--)
+                    N[y][x + dx] = n;
+                if (sym)
+                    p1 += n;
+                n = sym = 0;
             }
 
-            if (currentNumberValue != 0) {
-                currentNumber.endIndex = globalIndex - 1;
-                currentNumber.value = currentNumberValue;
-
-                numbers[numberIndex] = currentNumber;
-                numberIndex++;
-            }
-
-            currentNumberValue = 0;
-        }
-    }
-
-    fseek(fp, 0, SEEK_SET);
-
-    globalIndex = 0;
-    int sum = 0;
-
-    // Second, find all symbols
-    while (fgets(buffer, BUFFER_COUNT, fp) != NULL) {
-        for (int index = 0; index < BUFFER_COUNT; index++, globalIndex++) {
-            char c = buffer[index];
-            if (c == '\0')
-                break;
-
-            if (c == '.' || c == '\n' || (c >= '0' && c <= '9'))
+    /*
+     * Pass 2: solve part 2 by finding all '*', then counting and
+     * multiplying adjecent numbers.
+     *
+     * Horizontal adjecency is trivial but vertical/diagonal has
+     * two situations: if there's a digit directly North of the '+',
+     * it must be a single number: NW and NE would connect to it.
+     * If N isn't a digit, digits in NW and NE belong to separate
+     * numbers.
+     */
+    for (y = 1; y <= h; y++)
+        for (x = 1; G[y][x]; x++) {
+            if (G[y][x] != '*')
                 continue;
 
-            // these define indices on the left and right of the found symbol
-            int leftIndex = globalIndex - LINE_LEN - 1;
-            int rightIndex = leftIndex + 2;
+            n = 0;
+            r = 1;
 
-            // Every iteration, we increase by LINE_LEN to index into the line
-            // below
-            for (int i = 0; i < 3;
-                 i++, leftIndex += LINE_LEN, rightIndex += LINE_LEN) {
-                // index into the numbers array
-                // this number is the first number to have an endIndex >=
-                // leftIndex this finds the lowest possible number that could be
-                // counted
-                int numbersEndIndex = FindEndIndex(numbers, leftIndex);
+            if (N[y][x - 1]) {
+                n++;
+                r *= N[y][x - 1];
+            }
+            if (N[y][x + 1]) {
+                n++;
+                r *= N[y][x + 1];
+            }
 
-                // move along the same line rightward, looking for more
-                // countable numbers
-                for (int j = numbersEndIndex; j < NUMBER_COUNT; j++) {
-                    Number n = numbers[j];
-
-                    if (n.counted)
-                        continue;
-                    //      EEEEEEE...
-                    //...SSSSSS
-                    //      LMR
-
-                    // A number is only counted if it is within the bounds of
-                    // the symbol
-                    if (leftIndex <= n.endIndex && n.startIndex <= rightIndex) {
-                        sum += n.value;
-                        n.counted = 1; // mark the number as counted
-                        continue;
-                    }
-
-                    break; // No more valid numbers on this line, move to the
-                           // next line
+            if (N[y - 1][x]) {
+                n++;
+                r *= N[y - 1][x];
+            } else {
+                if (N[y - 1][x - 1]) {
+                    n++;
+                    r *= N[y - 1][x - 1];
+                }
+                if (N[y - 1][x + 1]) {
+                    n++;
+                    r *= N[y - 1][x + 1];
                 }
             }
+
+            if (N[y + 1][x]) {
+                n++;
+                r *= N[y + 1][x];
+            } else {
+                if (N[y + 1][x - 1]) {
+                    n++;
+                    r *= N[y + 1][x - 1];
+                }
+                if (N[y + 1][x + 1]) {
+                    n++;
+                    r *= N[y + 1][x + 1];
+                }
+            }
+
+            if (n == 2)
+                p2 += r;
         }
-    }
 
-    printf("Sum: %d\n", sum);
-}
-
-// void PartTwo() {
-//     char buffer[BUFFER_COUNT];
-//
-//     Number numbers[NUMBER_COUNT];
-//     memset(numbers, 0, NUMBER_COUNT * sizeof(Number));
-//     int numberIndex = 0;
-//
-//     FILE *fp = fopen("./day3/input.txt", "r");
-//
-//     if (fp == NULL) {
-//         printf("Unable to open file.");
-//     }
-//
-//     int currentNumberValue = 0;
-//     Number currentNumber = {0};
-//
-//     int globalIndex = 0;
-//
-//     // First pass, parse all numbers
-//     while (fgets(buffer, BUFFER_COUNT, fp) != NULL) {
-//         for (int index = 0; index < BUFFER_COUNT; index++, globalIndex++) {
-//             char c = buffer[index];
-//             if (c == '\0')
-//                 break;
-//
-//             if (c >= '0' && c <= '9') {
-//                 if (currentNumberValue == 0)
-//                     currentNumber.startIndex = globalIndex;
-//                 currentNumberValue *= 10;
-//                 currentNumberValue += c - '0';
-//                 continue;
-//             }
-//
-//             if (currentNumberValue != 0) {
-//                 currentNumber.endIndex = globalIndex - 1;
-//                 currentNumber.value = currentNumberValue;
-//
-//                 numbers[numberIndex] = currentNumber;
-//                 numberIndex++;
-//             }
-//
-//             currentNumberValue = 0;
-//         }
-//     }
-//
-//     fseek(fp, 0, SEEK_SET);
-//
-//     globalIndex = 0;
-//     int sum = 0;
-//
-//     while (fgets(buffer, BUFFER_COUNT, fp) != NULL) {
-//         for (int index = 0; index < BUFFER_COUNT; index++, globalIndex++) {
-//             char c = buffer[index];
-//             if (c == '\0')
-//                 break;
-//
-//             if (c != '*')
-//                 continue;
-//
-//             int leftIndex = globalIndex - LINE_LEN - 1;
-//             int rightIndex = leftIndex + 2;
-//
-//             int product = 1;
-//             int foundNumbers = 0; // number of gears, must be two to count
-//
-//             for (int i = 0; i < 3;
-//                  i++, leftIndex += LINE_LEN, rightIndex += LINE_LEN) {
-//                 int numbersEndIndex = FindEndIndex(numbers, leftIndex);
-//
-//                 for (int j = numbersEndIndex; j < NUMBER_COUNT; j++) {
-//                     Number n = numbers[j];
-//
-//                     if (leftIndex <= n.endIndex && n.startIndex <=
-//                     rightIndex) {
-//                         product *= n.value;
-//                         foundNumbers++;
-//                         continue;
-//                     }
-//
-//                     break;
-//                 }
-//             }
-//
-//             if (foundNumbers == 2)
-//                 sum += product;
-//         }
-//     }
-//
-//     printf("Sum: %d\n", sum);
-// }
-
-int main() {
-    PartOne();
-    // PartTwo();
+    printf("%d %d\n", p1, p2);
     return 0;
 }
